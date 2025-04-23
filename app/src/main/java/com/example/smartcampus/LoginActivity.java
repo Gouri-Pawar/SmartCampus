@@ -12,6 +12,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 
@@ -22,6 +23,7 @@ public class LoginActivity extends AppCompatActivity {
     private Button loginButton;
     private TextView signUpTextView;
     private FirebaseFirestore db;
+    private FirebaseAuth auth;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,6 +37,7 @@ public class LoginActivity extends AppCompatActivity {
         loginButton = findViewById(R.id.loginButton);
         signUpTextView = findViewById(R.id.signUpTextView);
         db = FirebaseFirestore.getInstance();
+        auth = FirebaseAuth.getInstance();
 
         loginButton.setOnClickListener(v -> {
             animateLoginButton();
@@ -48,26 +51,36 @@ public class LoginActivity extends AppCompatActivity {
         String email = emailEditText.getText().toString().trim();
         String enteredPassword = passwordEditText.getText().toString().trim();
 
-        if (email.isEmpty() || enteredPassword.isEmpty())
-        {
+        if (email.isEmpty() || enteredPassword.isEmpty()) {
             showToast("Please enter email and password");
             return;
         }
 
-        checkUserCredentials(email, enteredPassword);
+        if (!facultyRadioButton.isChecked() && !studentRadioButton.isChecked()) {
+            showToast("Please select a role (Faculty or Student)");
+            return;
+        }
+
+        auth.signInWithEmailAndPassword(email, enteredPassword)
+                .addOnCompleteListener(this, task -> {
+                    if (task.isSuccessful()) {
+                        checkUserRole(email);
+                    } else {
+                        showToast("Login failed. Please check your credentials.");
+                    }
+                });
     }
 
-    private void checkUserCredentials(String email, String enteredPassword) {
+    private void checkUserRole(String email) {
         db.collection("users")
                 .whereEqualTo("email", email)
                 .get()
                 .addOnCompleteListener(task -> {
                     if (task.isSuccessful() && !task.getResult().isEmpty()) {
                         for (QueryDocumentSnapshot document : task.getResult()) {
-                            String storedPassword = document.getString("password");
                             String role = document.getString("role");
 
-                            if (storedPassword != null && storedPassword.equals(enteredPassword)) {
+                            if (role != null) {
                                 if ("faculty".equals(role) && facultyRadioButton.isChecked()) {
                                     showToast("Login successful as Faculty");
                                     startActivity(new Intent(LoginActivity.this, TeacherDashboard.class));
@@ -78,7 +91,7 @@ public class LoginActivity extends AppCompatActivity {
                                     showToast("Invalid role selection");
                                 }
                             } else {
-                                showToast("Incorrect password. Please try again.");
+                                showToast("Role not found. Please contact support.");
                             }
                         }
                     } else {
