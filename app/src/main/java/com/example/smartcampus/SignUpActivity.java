@@ -15,6 +15,8 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.HashMap;
@@ -73,23 +75,36 @@ public class SignUpActivity extends AppCompatActivity {
     }
 
     private void saveUserToFirestore(String email, String password, String role) {
-        Map<String, Object> user = new HashMap<>();
-        user.put("email", email);
-        user.put("password", password);
-        user.put("role", role);
+        FirebaseAuth.getInstance().createUserWithEmailAndPassword(email, password)
+                .addOnCompleteListener(task -> {
+                    if (task.isSuccessful()) {
+                        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+                        if (user != null) {
+                            String uid = user.getUid();
 
-        db.collection("users").add(user)
-                .addOnSuccessListener(documentReference -> {
-                    showToast("Sign up successful!");
-                    progressBar.setVisibility(View.GONE);
-                    startActivity(new Intent(SignUpActivity.this, LoginActivity.class));
-                    finish();
-                })
-                .addOnFailureListener(e -> {
-                    showToast("Failed to sign up: " + e.getMessage());
-                    progressBar.setVisibility(View.GONE);
+                            Map<String, Object> userMap = new HashMap<>();
+                            userMap.put("email", email);
+                            userMap.put("role", role);
+
+                            db.collection("users").document(uid).set(userMap)
+                                    .addOnSuccessListener(aVoid -> {
+                                        showToast("Sign up successful!");
+                                        progressBar.setVisibility(View.GONE);
+                                        startActivity(new Intent(SignUpActivity.this, LoginActivity.class));
+                                        finish();
+                                    })
+                                    .addOnFailureListener(e -> {
+                                        showToast("Failed to save user: " + e.getMessage());
+                                        progressBar.setVisibility(View.GONE);
+                                    });
+                        }
+                    } else {
+                        showToast("Sign up failed: " + task.getException().getMessage());
+                        progressBar.setVisibility(View.GONE);
+                    }
                 });
     }
+
 
     private void showToast(String message) {
         Toast.makeText(SignUpActivity.this, message, Toast.LENGTH_SHORT).show();
